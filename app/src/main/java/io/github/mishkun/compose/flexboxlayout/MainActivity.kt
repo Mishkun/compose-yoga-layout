@@ -16,10 +16,14 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutModifier
 import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.layout.SubcomposeLayoutState
+import androidx.compose.ui.layout.SubcomposeSlotReusePolicy
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -35,6 +39,7 @@ import io.github.orioncraftmc.meditate.YogaNodeFactory
 import io.github.orioncraftmc.meditate.enums.YogaFlexDirection
 import io.github.orioncraftmc.meditate.enums.YogaMeasureMode
 import io.github.orioncraftmc.meditate.enums.YogaWrap
+import kotlin.random.Random
 
 
 class MainActivity : ComponentActivity() {
@@ -162,9 +167,11 @@ fun GoogleFlexBox() {
 
 @Composable
 fun YogaCompose(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Layout(content = content, modifier = modifier) { measurables, constraints ->
+    val subcomposeLayoutState = remember { SubcomposeLayoutState(SubcomposeSlotReusePolicy(1)) }
+    SubcomposeLayout(state = subcomposeLayoutState, modifier = modifier)  { constraints ->
         val thisYogaNode = YogaNodeFactory.create()
-        val childNodes = measurables.map { measurable ->
+        var measurables = subcompose(Random.nextInt()) { content() }
+        val childNodes = measurables.mapIndexed { idx, measurable ->
             YogaNodeFactory.create().apply {
                 setMeasureFunction { node, width, widthMode, height, heightMode ->
                     val constraint = Constraints(
@@ -193,8 +200,9 @@ fun YogaCompose(modifier: Modifier = Modifier, content: @Composable () -> Unit) 
                             YogaMeasureMode.AT_MOST -> width.toInt()
                         }
                     )
-                    val placeable = measurable.measure(constraint)
+                    val placeable = measurables[idx].measure(constraint)
                     node.data = placeable
+                    measurables = subcompose(Random.nextInt()) { content() }
                     YogaMeasureOutput.make(placeable.measuredWidth, placeable.measuredHeight)
                 }
             }
@@ -219,10 +227,11 @@ fun YogaCompose(modifier: Modifier = Modifier, content: @Composable () -> Unit) 
 @Preview(showBackground = true)
 @Composable
 fun YogaDefaultPreview() {
-        YogaCompose(modifier = Modifier.width(200.dp).height(100.dp)) {
+        YogaCompose(modifier = Modifier
+            .width(250.dp)) {
             Text(text = "Hello Android!", modifier = Modifier.height(48.dp))
             Text(text = "Hello Android2!")
-            Text(text = "Hello Android3  !")
+            Text(text = "Hello Android3!")
             Text(text = "Hello Android4!")
         }
 }
