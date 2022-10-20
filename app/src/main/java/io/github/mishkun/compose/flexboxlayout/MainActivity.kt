@@ -17,7 +17,7 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -25,7 +25,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MultiMeasureLayout
 import androidx.compose.ui.layout.ParentDataModifier
-import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -45,6 +45,7 @@ import io.github.orioncraftmc.meditate.enums.YogaEdge
 import io.github.orioncraftmc.meditate.enums.YogaFlexDirection
 import io.github.orioncraftmc.meditate.enums.YogaMeasureMode
 import io.github.orioncraftmc.meditate.enums.YogaWrap
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 
@@ -177,164 +178,10 @@ fun GoogleFlexBox() {
 
 val YogaNodeLocal: androidx.compose.runtime.ProvidableCompositionLocal<YogaNode?> = compositionLocalOf { null }
 
-@Composable
-fun YogaNode(
-    modifier: Modifier = Modifier,
-    flexDirection: YogaFlexDirection = YogaFlexDirection.ROW,
-    content: @Composable () -> Unit
-) {
-    val nodeContainer = remember {
-        FlexNodeContainer(
-            YogaNodeFactory.create().apply {
-                this.flexDirection = flexDirection
-            }
-        )
-    }
-    Box(
-        modifier
-            .then(YogaModifier2(nodeContainer.node))
-            .layout { measurable, constraints ->
-//                nodeContainer.node.dirty()
-                val placeable = measurable.measure(constraints)
-                layout(placeable.width, placeable.height) {
-                    placeable.place(0, 0)
-                }
-            }
-    ) {
-        content()
-    }
-}
+@Stable
 data class FlexNodeContainer(
     val node: YogaNode
 )
-@Composable
-fun YogaRoot(
-    modifier: Modifier = Modifier,
-    flexDirection: YogaFlexDirection = YogaFlexDirection.ROW,
-    content: @Composable () -> Unit
-) {
-    val rootNodeContainer = remember { FlexNodeContainer(YogaNodeFactory.create().apply {
-        this.flexDirection = flexDirection
-        this.wrap = YogaWrap.WRAP
-    }) }
-    CompositionLocalProvider(YogaNodeLocal provides rootNodeContainer.node) {
-        MultiMeasureLayout(content = content, modifier = modifier) { measurables: List<Measurable>, constraints: Constraints ->
-            val allNodeContainerMeasurables = measurables.filter {
-                it.parentData is YogaModifier2
-            }
-
-            val nodeContainers = allNodeContainerMeasurables.mapNotNull {
-                it.parentData as? YogaModifier2
-            }
-
-            if (rootNodeContainer.node.childCount > nodeContainers.count()) {
-                val numberOfChildrenToRemove = rootNodeContainer.node.childCount - nodeContainers.count()
-
-                for (i in 1..numberOfChildrenToRemove) {
-                    rootNodeContainer.node.removeChildAt(
-                        rootNodeContainer.node.childCount - 1
-                    )
-                }
-            }
-
-            nodeContainers.forEachIndexed { index, layoutContainer ->
-                layoutContainer.node.setMeasureFunction { _, suggestedWidth, widthMode, suggestedHeight, heightMode ->
-                    val placeable = allNodeContainerMeasurables[index].measure(
-                        Constraints(
-                            maxWidth = if (suggestedWidth.isNaN()) Constraints.Infinity
-                            else suggestedWidth.roundToInt(),
-                            maxHeight = if (suggestedHeight.isNaN()) Constraints.Infinity
-                            else suggestedHeight.roundToInt()
-                        )
-                    )
-
-                    fun sanitize(
-                        constrainedSize: Float,
-                        measuredSize: Float,
-                        mode: YogaMeasureMode
-                    ): Float {
-                        return when (mode) {
-                            YogaMeasureMode.UNDEFINED -> measuredSize
-                            YogaMeasureMode.EXACTLY -> constrainedSize
-                            YogaMeasureMode.AT_MOST -> kotlin.math.min(measuredSize, constrainedSize)
-                        }
-                    }
-                    return@setMeasureFunction YogaMeasureOutput.make(
-                        sanitize(suggestedWidth, placeable.width.toFloat(), widthMode),
-                        sanitize(suggestedHeight, placeable.height.toFloat(), heightMode)
-                    )
-                }
-
-                if (rootNodeContainer.node.childCount >= index + 1) {
-                    if (rootNodeContainer.node.getChildAt(index) != layoutContainer.node) {
-                        rootNodeContainer.node.removeChildAt(index)
-                        rootNodeContainer.node.addChildAt(layoutContainer.node, index)
-                    }
-                } else {
-                    rootNodeContainer.node.addChildAt(layoutContainer.node, index)
-                }
-            }
-
-            rootNodeContainer.node.calculateLayout(
-//                flexibleAxes.contains(Axis.HORIZONTAL).let {
-//                    if (it) {
-//                        YogaConstants.UNDEFINED
-//                    } else {
-                        if (constraints.hasBoundedWidth) {
-                            constraints.maxWidth.toFloat()
-                        } else {
-                            YogaConstants.UNDEFINED
-//                        }
-//                    }
-                },
-//                flexibleAxes.contains(Axis.VERTICAL).let {
-//                    if (it) {
-//                        YogaConstants.UNDEFINED
-//                    } else {
-                        if (constraints.hasBoundedHeight) {
-                            constraints.maxHeight.toFloat()
-                        } else {
-                            YogaConstants.UNDEFINED
-//                        }
-//                    }
-                }
-            )
-
-            val placeables = allNodeContainerMeasurables.mapIndexed { index, measurable ->
-                val node = nodeContainers[index].node
-
-                val paddingStart = node.getLayoutPadding(YogaEdge.START)
-                val paddingEnd = node.getLayoutPadding(YogaEdge.END)
-                val paddingTop = node.getLayoutPadding(YogaEdge.TOP)
-                val paddingBottom = node.getLayoutPadding(YogaEdge.BOTTOM)
-
-                measurable.measure(
-                    Constraints(
-                        maxWidth = node.layoutWidth.roundToInt() - paddingStart.toInt() - paddingEnd.toInt(),
-                        maxHeight = node.layoutHeight.roundToInt() - paddingTop.toInt() - paddingBottom.toInt()
-                    )
-                )
-            }
-
-            layout(
-                rootNodeContainer.node.layoutWidth.roundToInt(),
-                rootNodeContainer.node.layoutHeight.roundToInt()
-            ) {
-                placeables.forEachIndexed { index, placeable ->
-                    val node = nodeContainers[index].node
-
-                    val paddingStart = node.getLayoutPadding(YogaEdge.START)
-                    val paddingTop = node.getLayoutPadding(YogaEdge.TOP)
-
-                    placeable.place(
-                        x = node.layoutX.roundToInt() + paddingStart.toInt(),
-                        y = node.layoutY.roundToInt() + paddingTop.toInt()
-                    )
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun Testlayout(num: Int, content: @Composable () -> Unit) {
@@ -344,14 +191,14 @@ fun Testlayout(num: Int, content: @Composable () -> Unit) {
         Log.d("TestLayout", "$num After measure")
         layout(constraints.maxWidth, constraints.maxHeight) {
             Log.d("TestLayout", "$num Before place")
-            placeables.forEach { it.place(0,0) }
+            placeables.forEach { it.place(0, 0) }
             Log.d("TestLayout", "$num After place")
         }
     }
 }
 
 @Composable
-@Preview
+//@Preview
 fun TestLayoutPreview() {
     Testlayout(num = 0) {
 
@@ -376,11 +223,114 @@ fun YogaCompose(
     flexDirection: YogaFlexDirection = YogaFlexDirection.ROW,
     content: @Composable () -> Unit
 ) {
-    val node = YogaNodeLocal.current
-    if (node != null) {
-        io.github.mishkun.compose.flexboxlayout.YogaNode(modifier, flexDirection, content)
-    } else {
-        YogaRoot(modifier, flexDirection, content)
+    val rootNodeContainer = remember {
+        FlexNodeContainer(YogaNodeFactory.create().apply {
+            this.flexDirection = flexDirection
+            wrap = YogaWrap.WRAP
+        })
+    }
+    MultiMeasureLayout(content = content, modifier = modifier) { measurables: List<Measurable>, constraints: Constraints ->
+        val nodes = measurables.mapIndexed { index, measurable ->
+            val nodeModifier = measurable.parentData as? YogaModifier2
+            if (nodeModifier?.node == null) {
+                val node = YogaNodeFactory.create()
+                Log.d("YogaLayoutComposable", "New node $node, Idx: $index")
+                node.setMeasureFunction { _, suggestedWidth, widthMode, suggestedHeight, heightMode ->
+                    Log.d("YogaLayoutComposable", "Measuring from $node, Idx: $index")
+                    val placeable = measurable.measure(
+                        Constraints(
+                            maxWidth = if (suggestedWidth.isNaN()) Constraints.Infinity
+                            else suggestedWidth.roundToInt(),
+                            maxHeight = if (suggestedHeight.isNaN()) Constraints.Infinity
+                            else suggestedHeight.roundToInt()
+                        )
+                    )
+
+                    fun sanitize(
+                        constrainedSize: Float,
+                        measuredSize: Float,
+                        mode: YogaMeasureMode
+                    ): Float {
+                        return when (mode) {
+                            YogaMeasureMode.UNDEFINED -> measuredSize
+                            YogaMeasureMode.EXACTLY -> constrainedSize
+                            YogaMeasureMode.AT_MOST -> min(measuredSize, constrainedSize)
+                        }
+                    }
+                    return@setMeasureFunction YogaMeasureOutput.make(
+                        sanitize(suggestedWidth, placeable.width.toFloat(), widthMode),
+                        sanitize(suggestedHeight, placeable.height.toFloat(), heightMode)
+                    )
+                }
+
+                rootNodeContainer.node.addChildAt(node, index)
+                node.data = measurable
+                node
+            } else {
+                nodeModifier.node.data = measurable
+                val owner = nodeModifier.node.owner
+                Log.d("YogaLayoutComposable", "Node: ${nodeModifier.node}, Idx: $index, Parent: $owner")
+                owner?.removeChildAt(owner.indexOf(nodeModifier.node))
+                rootNodeContainer.node.addChildAt(nodeModifier.node, index)
+                nodeModifier.node
+            }
+        }
+
+        rootNodeContainer.node.calculateLayout(
+            //                flexibleAxes.contains(Axis.HORIZONTAL).let {
+            //                    if (it) {
+            //                        YogaConstants.UNDEFINED
+            //                    } else {
+            if (constraints.hasBoundedWidth) {
+                constraints.maxWidth.toFloat()
+            } else {
+                YogaConstants.UNDEFINED
+                //                        }
+                //                    }
+            },
+            //                flexibleAxes.contains(Axis.VERTICAL).let {
+            //                    if (it) {
+            //                        YogaConstants.UNDEFINED
+            //                    } else {
+            if (constraints.hasBoundedHeight) {
+                constraints.maxHeight.toFloat()
+            } else {
+                YogaConstants.UNDEFINED
+                //                        }
+                //                    }
+            }
+        )
+
+        nodes.forEach { node ->
+            val paddingStart = node.getLayoutPadding(YogaEdge.START)
+            val paddingEnd = node.getLayoutPadding(YogaEdge.END)
+            val paddingTop = node.getLayoutPadding(YogaEdge.TOP)
+            val paddingBottom = node.getLayoutPadding(YogaEdge.BOTTOM)
+
+            val measurable = node.data as Measurable
+            node.data = measurable.measure(
+                Constraints(
+                    maxWidth = node.layoutWidth.roundToInt() - paddingStart.toInt() - paddingEnd.toInt(),
+                    maxHeight = node.layoutHeight.roundToInt() - paddingTop.toInt() - paddingBottom.toInt()
+                )
+            )
+        }
+
+        layout(
+            rootNodeContainer.node.layoutWidth.roundToInt(),
+            rootNodeContainer.node.layoutHeight.roundToInt()
+        ) {
+            nodes.forEach { node ->
+                val paddingStart = node.getLayoutPadding(YogaEdge.START)
+                val paddingTop = node.getLayoutPadding(YogaEdge.TOP)
+
+                val placeable = node.data as Placeable
+                placeable.place(
+                    x = node.layoutX.roundToInt() + paddingStart.toInt(),
+                    y = node.layoutY.roundToInt() + paddingTop.toInt()
+                )
+            }
+        }
     }
 }
 
@@ -400,44 +350,36 @@ class YogaModifier(val flexGrow: Int) : ParentDataModifier {
 @Composable
 fun YogaDefaultPreview() {
     YogaCompose(modifier = Modifier.width(200.dp)) {
-        YogaCompose() {
-            AndroidView(modifier = YogaModifier(flexGrow = 1), factory = { ctx ->
-                TextView(ctx).apply {
-                    setText("Hello Android!")
-                    setBackgroundColor(ctx.getColor(R.color.teal_200))
-                    layoutParams = ViewGroup.LayoutParams(WRAP_CONTENT, ctx.resources.displayMetrics.density.toInt() * 48)
-                    alpha = 0.5f
-                }
-            })
-        }
-        YogaCompose() {
+        AndroidView(modifier = YogaModifier(flexGrow = 1), factory = { ctx ->
+            TextView(ctx).apply {
+                setText("Hello Android!")
+                setBackgroundColor(ctx.getColor(R.color.teal_200))
+                layoutParams = ViewGroup.LayoutParams(WRAP_CONTENT, ctx.resources.displayMetrics.density.toInt() * 48)
+                alpha = 0.5f
+            }
+        })
+        AndroidView(factory = { ctx ->
+            TextView(ctx).apply {
+                setText("Hello Android2!")
+                setBackgroundColor(ctx.getColor(R.color.teal_700))
+                alpha = 0.5f
+            }
+        })
+        YogaCompose(flexDirection = YogaFlexDirection.COLUMN) {
             AndroidView(factory = { ctx ->
                 TextView(ctx).apply {
-                    setText("Hello Android2!")
-                    setBackgroundColor(ctx.getColor(R.color.teal_700))
+                    setText("Hello Android3!")
+                    setBackgroundColor(ctx.getColor(R.color.purple_200))
                     alpha = 0.5f
                 }
             })
-        }
-        YogaCompose(flexDirection = YogaFlexDirection.COLUMN) {
-            YogaCompose() {
-                AndroidView(factory = { ctx ->
-                    TextView(ctx).apply {
-                        setText("Hello Android3!")
-                        setBackgroundColor(ctx.getColor(R.color.purple_200))
-                        alpha = 0.5f
-                    }
-                })
-            }
-            YogaCompose() {
-                AndroidView(factory = { ctx ->
-                    TextView(ctx).apply {
-                        setText("Hello Android4!")
-                        setBackgroundColor(ctx.getColor(R.color.purple_700))
-                        alpha = 0.5f
-                    }
-                })
-            }
+            AndroidView(factory = { ctx ->
+                TextView(ctx).apply {
+                    setText("Hello Android4!")
+                    setBackgroundColor(ctx.getColor(R.color.purple_700))
+                    alpha = 0.5f
+                }
+            })
 
         }
     }
