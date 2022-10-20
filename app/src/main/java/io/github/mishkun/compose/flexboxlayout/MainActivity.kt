@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.MaterialTheme
@@ -26,24 +27,27 @@ import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MultiMeasureLayout
 import androidx.compose.ui.layout.ParentDataModifier
 import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.facebook.soloader.SoLoader
-import com.google.android.flexbox.FlexDirection
-import com.google.android.flexbox.FlexWrap
-import com.google.android.flexbox.FlexboxLayout
 import io.github.mishkun.compose.flexboxlayout.ui.theme.ComposeFlexboxLayoutTheme
 import io.github.mishkun.compose.flexboxlayout.yg.YogaLayout
 import io.github.orioncraftmc.meditate.YogaConstants
 import io.github.orioncraftmc.meditate.YogaMeasureOutput
 import io.github.orioncraftmc.meditate.YogaNode
 import io.github.orioncraftmc.meditate.YogaNodeFactory
+import io.github.orioncraftmc.meditate.enums.YogaAlign
+import io.github.orioncraftmc.meditate.enums.YogaDirection
 import io.github.orioncraftmc.meditate.enums.YogaEdge
 import io.github.orioncraftmc.meditate.enums.YogaFlexDirection
+import io.github.orioncraftmc.meditate.enums.YogaJustify
 import io.github.orioncraftmc.meditate.enums.YogaMeasureMode
+import io.github.orioncraftmc.meditate.enums.YogaOverflow
+import io.github.orioncraftmc.meditate.enums.YogaPositionType
 import io.github.orioncraftmc.meditate.enums.YogaWrap
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -146,34 +150,34 @@ fun YogaFlexBox() {
 @Preview
 @Composable
 fun GoogleFlexBox() {
-    AndroidView(modifier = Modifier.width(200.dp), factory = { ctx ->
-        FlexboxLayout(ctx).apply {
-            addView(TextView(ctx).apply {
-                setText("Hello Android!")
-                setBackgroundColor(ctx.getColor(R.color.teal_200))
-                layoutParams = FlexboxLayout.LayoutParams(WRAP_CONTENT, ctx.resources.displayMetrics.density.toInt() * 48)
-            })
-            addView(TextView(ctx).apply {
-                setText("Hello Android2!")
-                setBackgroundColor(ctx.getColor(R.color.teal_700))
-            })
-            addView(TextView(ctx).apply {
-                setText("Hello Android3!")
-                setBackgroundColor(ctx.getColor(R.color.purple_200))
-            })
-            addView(TextView(ctx).apply {
-                setText("Hello Android4!")
-                setBackgroundColor(ctx.getColor(R.color.purple_700))
-            })
-            setFlexDirection(FlexDirection.ROW)
-            flexWrap = FlexWrap.WRAP
-
-            val view: View = getChildAt(0)
-            val lp = view.layoutParams as FlexboxLayout.LayoutParams
-            lp.flexGrow = 1f
-            view.layoutParams = lp
-        }
-    })
+//    AndroidView(modifier = Modifier.width(200.dp), factory = { ctx ->
+//        FlexboxLayout(ctx).apply {
+//            addView(TextView(ctx).apply {
+//                setText("Hello Android!")
+//                setBackgroundColor(ctx.getColor(R.color.teal_200))
+//                layoutParams = FlexboxLayout.LayoutParams(WRAP_CONTENT, ctx.resources.displayMetrics.density.toInt() * 48)
+//            })
+//            addView(TextView(ctx).apply {
+//                setText("Hello Android2!")
+//                setBackgroundColor(ctx.getColor(R.color.teal_700))
+//            })
+//            addView(TextView(ctx).apply {
+//                setText("Hello Android3!")
+//                setBackgroundColor(ctx.getColor(R.color.purple_200))
+//            })
+//            addView(TextView(ctx).apply {
+//                setText("Hello Android4!")
+//                setBackgroundColor(ctx.getColor(R.color.purple_700))
+//            })
+//            setFlexDirection(FlexDirection.ROW)
+//            flexWrap = FlexWrap.WRAP
+//
+//            val view: View = getChildAt(0)
+//            val lp = view.layoutParams as FlexboxLayout.LayoutParams
+//            lp.flexGrow = 1f
+//            view.layoutParams = lp
+//        }
+//    })
 }
 
 val YogaNodeLocal: androidx.compose.runtime.ProvidableCompositionLocal<YogaNode?> = compositionLocalOf { null }
@@ -217,23 +221,696 @@ fun TestLayoutPreview() {
     }
 }
 
+
+enum class EdgeKind {
+    POSITION, PADDING, MARGIN, BORDER
+}
+
+fun Edges.applyTo(node: YogaNode, kind: EdgeKind, density: Float) {
+    when (kind) {
+        EdgeKind.POSITION -> {
+            when (leading.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setPositionPercent(YogaEdge.START, leading.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setPosition(YogaEdge.START, leading.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setPosition(YogaEdge.START, YogaConstants.UNDEFINED)
+                }
+            }
+
+            when (trailing.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setPositionPercent(YogaEdge.END, trailing.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setPosition(YogaEdge.END, trailing.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setPosition(YogaEdge.END, YogaConstants.UNDEFINED)
+                }
+            }
+
+            when (top.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setPositionPercent(YogaEdge.TOP, top.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setPosition(YogaEdge.TOP, top.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setPosition(YogaEdge.TOP, YogaConstants.UNDEFINED)
+                }
+            }
+
+            when (bottom.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setPositionPercent(YogaEdge.BOTTOM, bottom.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setPosition(YogaEdge.BOTTOM, bottom.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setPosition(YogaEdge.BOTTOM, YogaConstants.UNDEFINED)
+                }
+            }
+        }
+
+        EdgeKind.PADDING -> {
+            when (leading.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setPaddingPercent(YogaEdge.START, leading.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setPadding(YogaEdge.START, leading.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setPadding(YogaEdge.START, YogaConstants.UNDEFINED)
+                }
+            }
+
+            when (trailing.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setPaddingPercent(YogaEdge.END, trailing.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setPadding(YogaEdge.END, trailing.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setPadding(YogaEdge.END, YogaConstants.UNDEFINED)
+                }
+            }
+
+            when (top.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setPaddingPercent(YogaEdge.TOP, top.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setPadding(YogaEdge.TOP, top.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setPadding(YogaEdge.TOP, YogaConstants.UNDEFINED)
+                }
+            }
+
+            when (bottom.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setPaddingPercent(YogaEdge.BOTTOM, bottom.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setPadding(YogaEdge.BOTTOM, bottom.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setPadding(YogaEdge.BOTTOM, YogaConstants.UNDEFINED)
+                }
+            }
+        }
+
+        EdgeKind.MARGIN -> {
+            when (leading.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setMarginPercent(YogaEdge.START, leading.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setMargin(YogaEdge.START, leading.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                    node.setMarginAuto(YogaEdge.START)
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setMargin(YogaEdge.START, YogaConstants.UNDEFINED)
+                }
+            }
+
+            when (trailing.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setMarginPercent(YogaEdge.END, trailing.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setMargin(YogaEdge.END, trailing.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                    node.setMarginAuto(YogaEdge.END)
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setMargin(YogaEdge.END, YogaConstants.UNDEFINED)
+                }
+            }
+
+            when (top.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setMarginPercent(YogaEdge.TOP, top.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setMargin(YogaEdge.TOP, top.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                    node.setMarginAuto(YogaEdge.TOP)
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setMargin(YogaEdge.TOP, YogaConstants.UNDEFINED)
+                }
+            }
+
+            when (bottom.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setMarginPercent(YogaEdge.BOTTOM, bottom.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setMargin(YogaEdge.BOTTOM, bottom.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                    node.setMarginAuto(YogaEdge.BOTTOM)
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setMargin(YogaEdge.BOTTOM, YogaConstants.UNDEFINED)
+                }
+            }
+        }
+
+        EdgeKind.BORDER -> {
+            when (leading.kind) {
+                FlexSizeKind.PERCENT -> {
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setBorder(YogaEdge.START, leading.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                }
+            }
+
+            when (trailing.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setMarginPercent(YogaEdge.END, trailing.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setBorder(YogaEdge.END, trailing.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                    node.setMarginAuto(YogaEdge.END)
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setMargin(YogaEdge.END, YogaConstants.UNDEFINED)
+                }
+            }
+
+            when (top.kind) {
+                FlexSizeKind.PERCENT -> {
+                    node.setMarginPercent(YogaEdge.TOP, top.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setBorder(YogaEdge.TOP, top.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                    node.setMarginAuto(YogaEdge.TOP)
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                    node.setMargin(YogaEdge.TOP, YogaConstants.UNDEFINED)
+                }
+            }
+
+            when (bottom.kind) {
+                FlexSizeKind.PERCENT -> {
+                }
+
+                FlexSizeKind.CONSTANT -> {
+                    node.setBorder(YogaEdge.BOTTOM, bottom.dpAmount(density)!!)
+                }
+
+                FlexSizeKind.AUTO -> {
+                }
+
+                FlexSizeKind.UNDEFINED -> {
+                }
+            }
+        }
+    }
+}
+
+fun Modifier.conditional(condition: Boolean, modifier: Modifier.() -> Modifier): Modifier {
+    return if (condition) {
+        then(modifier(Modifier))
+    } else {
+        this
+    }
+}
+
+enum class FlexSizeKind {
+    PERCENT,
+    CONSTANT,
+    AUTO,
+    UNDEFINED
+}
+
+data class Edges(
+    val leading: FlexSizeDimension = undefined(),
+    val trailing: FlexSizeDimension = undefined(),
+    val top: FlexSizeDimension = undefined(),
+    val bottom: FlexSizeDimension = undefined()
+)
+
+fun all(dimension: FlexSizeDimension): Edges =
+    Edges(
+        leading = dimension,
+        trailing = dimension,
+        top = dimension,
+        bottom = dimension
+    )
+
+class FlexSizeDimension internal constructor(
+    val kind: FlexSizeKind,
+    val amount: Float?
+) {
+    internal fun dpAmount(density: Float): Float? =
+        amount?.let {
+            it * density
+        }
+}
+
+fun percent(amount: Float) = FlexSizeDimension(kind = FlexSizeKind.PERCENT, amount = amount)
+fun constant(amount: Float) = FlexSizeDimension(kind = FlexSizeKind.CONSTANT, amount = amount)
+
+fun auto() = FlexSizeDimension(kind = FlexSizeKind.AUTO, amount = null)
+fun undefined() = FlexSizeDimension(kind = FlexSizeKind.UNDEFINED, amount = null)
+
+data class FlexSize(
+    val width: FlexSizeDimension,
+    val height: FlexSizeDimension
+)
+
+enum class AlignItems {
+    STRETCH,
+    CENTER,
+    START,
+    END
+}
+
+enum class AlignSelf {
+    AUTO,
+    STRETCH,
+    CENTER,
+    START,
+    END
+}
+
+enum class AlignContent {
+    AUTO,
+    CENTER,
+    START,
+    END,
+    STRETCH
+}
+
+enum class FlexDirection {
+    COLUMN,
+    ROW,
+    COLUMN_REVERSE,
+    ROW_REVERSE
+}
+
+enum class FlexWrap {
+    WRAP,
+    NO_WRAP
+}
+
+enum class JustifyContent {
+    CENTER,
+    START,
+    END,
+    SPACE_AROUND,
+    SPACE_BETWEEN
+}
+
+enum class Direction {
+    LTR,
+    RTL,
+    INHERIT
+}
+
+enum class Overflow {
+    VISIBLE,
+    HIDDEN,
+    SCROLL
+}
+
+enum class PositionType {
+    ABSOLUTE,
+    RELATIVE
+}
+
+data class FlexStyle(
+    val size: FlexSize = FlexSize(width = undefined(), height = undefined()),
+    val minSize: FlexSize = FlexSize(width = undefined(), height = undefined()),
+    val maxSize: FlexSize = FlexSize(width = undefined(), height = undefined()),
+
+
+    // Specifies how flex-items are placed in the flex-container (defining the main-axis).
+    // - Note: Applies to flex-container.
+    val flexDirection: FlexDirection = FlexDirection.ROW,
+
+
+    // Specifies whether flex items are forced into a single line
+    // or can be wrapped onto multiple lines.
+    // - Note: Applies to flex-container.
+    val flexWrap: FlexWrap = FlexWrap.NO_WRAP,
+
+
+    // Distributes space between and around flex-items along the main-axis.
+    // - Note: Applies to flex-container.
+    val justifyContent: JustifyContent = JustifyContent.START,
+
+    // Distributes space between and around flex-items along the cross-axis.
+    // This works like `justifyContent` but in the perpendicular direction.
+    // - Note: Applies to flex-container.
+    val alignItems: AlignItems = AlignItems.STRETCH,
+
+    // Aligns a flex-container's lines when there is extra space on the cross-axis.
+    // - Warning: This property has no effect on single line.
+    // - Note: Applies to multi-line flex-container (no `FlexWrap.nowrap`).
+    val alignContent: AlignContent = AlignContent.STRETCH,
+
+
+    // Aligns self (flex-item) by overriding it's parent's (flex-container) `alignItems`.
+    // - Note: Applies to flex-item.
+    val alignSelf: AlignSelf = AlignSelf.AUTO,
+
+
+    // Shorthand property specifying the ability of a flex-item
+    // to alter its dimensions to fill available space.
+    // - Note: Applies to flex-item.
+    val flex: Float = Float.NaN,
+
+
+    // Grow factor of a flex-item.
+    // - Note: Applies to flex-item.
+    val flexGrow: Float = Float.NaN,
+
+    // Shrink factor of a flex-item.
+    // - Note: Applies to flex-item.
+    val flexShrink: Float = Float.NaN,
+
+    // Initial main size of a flex item.
+    // - Note: Applies to flex-item.
+    val flexBasis: Float = Float.NaN,
+
+    val direction: Direction = Direction.INHERIT,
+    val overflow: Overflow = Overflow.VISIBLE,
+    val positionType: PositionType = PositionType.RELATIVE,
+
+    // CSS's (top, right, bottom, left) that works with `positionType = .absolute`.
+    val position: Edges = Edges(),
+
+    val margin: Edges = Edges(),
+    val padding: Edges = Edges(),
+
+    // facebook/yoga implementation that mostly works as same as `padding`.
+    val border: Edges = Edges(),
+)
+
+fun FlexStyle.applyTo(node: YogaNode, density: Float) {
+    when (size.width.kind) {
+        FlexSizeKind.PERCENT -> size.width.amount?.let { node.setWidthPercent(it) }
+        FlexSizeKind.CONSTANT -> size.width.dpAmount(density)?.let { node.setWidth(it) }
+        FlexSizeKind.AUTO -> node.setWidthAuto()
+        FlexSizeKind.UNDEFINED -> {}
+    }
+
+    when (size.height.kind) {
+        FlexSizeKind.PERCENT -> size.height.amount?.let { node.setHeightPercent(it) }
+        FlexSizeKind.CONSTANT -> size.height.dpAmount(density)?.let { node.setHeight(it) }
+        FlexSizeKind.AUTO -> node.setHeightAuto()
+        FlexSizeKind.UNDEFINED -> {}
+    }
+
+    when (minSize.width.kind) {
+        FlexSizeKind.PERCENT -> minSize.width.amount?.let { node.setMinWidthPercent(it) }
+        FlexSizeKind.CONSTANT -> minSize.width.dpAmount(density)?.let { node.setMinWidth(it) }
+        FlexSizeKind.AUTO -> {}
+        FlexSizeKind.UNDEFINED -> {}
+    }
+
+    when (minSize.height.kind) {
+        FlexSizeKind.PERCENT -> minSize.height.amount?.let { node.setMinHeightPercent(it) }
+        FlexSizeKind.CONSTANT -> minSize.height.dpAmount(density)?.let { node.setMinHeight(it) }
+        FlexSizeKind.AUTO -> {}
+        FlexSizeKind.UNDEFINED -> {}
+    }
+
+    when (maxSize.width.kind) {
+        FlexSizeKind.PERCENT -> maxSize.width.amount?.let { node.setMaxWidthPercent(it) }
+        FlexSizeKind.CONSTANT -> maxSize.width.dpAmount(density)?.let { node.setMaxWidth(it) }
+        FlexSizeKind.AUTO -> {}
+        FlexSizeKind.UNDEFINED -> {}
+    }
+
+    when (maxSize.height.kind) {
+        FlexSizeKind.PERCENT -> maxSize.height.amount?.let { node.setMaxHeightPercent(it) }
+        FlexSizeKind.CONSTANT -> maxSize.height.dpAmount(density)?.let { node.setMaxHeight(it) }
+        FlexSizeKind.AUTO -> {}
+        FlexSizeKind.UNDEFINED -> {}
+    }
+
+    when (flexDirection) {
+        FlexDirection.COLUMN -> {
+            node.flexDirection = YogaFlexDirection.COLUMN
+        }
+
+        FlexDirection.ROW -> {
+            node.flexDirection = YogaFlexDirection.ROW
+        }
+
+        FlexDirection.COLUMN_REVERSE -> {
+            node.flexDirection = YogaFlexDirection.COLUMN_REVERSE
+        }
+
+        FlexDirection.ROW_REVERSE -> {
+            node.flexDirection = YogaFlexDirection.ROW_REVERSE
+        }
+    }
+
+    when (flexWrap) {
+        FlexWrap.WRAP -> {
+            node.wrap = YogaWrap.WRAP
+        }
+
+        FlexWrap.NO_WRAP -> {
+            node.wrap = YogaWrap.NO_WRAP
+        }
+    }
+
+    when (justifyContent) {
+        JustifyContent.CENTER -> {
+            node.justifyContent = YogaJustify.CENTER
+        }
+
+        JustifyContent.START -> {
+            node.justifyContent = YogaJustify.FLEX_START
+        }
+
+        JustifyContent.END -> {
+            node.justifyContent = YogaJustify.FLEX_END
+        }
+
+        JustifyContent.SPACE_AROUND -> {
+            node.justifyContent = YogaJustify.SPACE_AROUND
+        }
+
+        JustifyContent.SPACE_BETWEEN -> {
+            node.justifyContent = YogaJustify.SPACE_BETWEEN
+        }
+    }
+
+    when (alignItems) {
+        AlignItems.STRETCH -> {
+            node.alignItems = YogaAlign.STRETCH
+        }
+
+        AlignItems.CENTER -> {
+            node.alignItems = YogaAlign.CENTER
+        }
+
+        AlignItems.START -> {
+            node.alignItems = YogaAlign.FLEX_START
+        }
+
+        AlignItems.END -> {
+            node.alignItems = YogaAlign.FLEX_END
+        }
+    }
+
+    when (alignContent) {
+        AlignContent.AUTO -> {
+            node.alignContent = YogaAlign.AUTO
+        }
+
+        AlignContent.CENTER -> {
+            node.alignContent = YogaAlign.CENTER
+        }
+
+        AlignContent.START -> {
+            node.alignContent = YogaAlign.FLEX_START
+        }
+
+        AlignContent.END -> {
+            node.alignContent = YogaAlign.FLEX_END
+        }
+
+        AlignContent.STRETCH -> {
+            node.alignContent = YogaAlign.STRETCH
+        }
+    }
+
+    when (alignSelf) {
+        AlignSelf.AUTO -> {
+            node.alignSelf = YogaAlign.AUTO
+        }
+
+        AlignSelf.STRETCH -> {
+            node.alignSelf = YogaAlign.STRETCH
+        }
+
+        AlignSelf.CENTER -> {
+            node.alignSelf = YogaAlign.CENTER
+        }
+
+        AlignSelf.START -> {
+            node.alignSelf = YogaAlign.FLEX_START
+        }
+
+        AlignSelf.END -> {
+            node.alignSelf = YogaAlign.FLEX_END
+        }
+    }
+
+    node.flex = flex
+    node.flexGrow = flexGrow
+    node.flexShrink = flexShrink
+    node.setFlexBasis(flexBasis)
+
+    when (direction) {
+        Direction.LTR -> node.setDirection(YogaDirection.LTR)
+        Direction.RTL -> node.setDirection(YogaDirection.RTL)
+        Direction.INHERIT -> node.setDirection(YogaDirection.INHERIT)
+    }
+
+    when (overflow) {
+        Overflow.VISIBLE -> {
+            node.overflow = YogaOverflow.VISIBLE
+        }
+
+        Overflow.HIDDEN -> {
+            node.overflow = YogaOverflow.HIDDEN
+        }
+
+        Overflow.SCROLL -> {
+            node.overflow = YogaOverflow.SCROLL
+        }
+    }
+
+    when (positionType) {
+        PositionType.ABSOLUTE -> {
+            node.positionType = YogaPositionType.ABSOLUTE
+        }
+
+        PositionType.RELATIVE -> {
+            node.positionType = YogaPositionType.RELATIVE
+        }
+    }
+
+    position.applyTo(node, kind = EdgeKind.POSITION, density)
+    padding.applyTo(node, kind = EdgeKind.PADDING, density)
+    margin.applyTo(node, kind = EdgeKind.MARGIN, density)
+    border.applyTo(node, kind = EdgeKind.BORDER, density)
+}
+
+enum class Axis {
+    VERTICAL, HORIZONTAL
+}
+
 @Composable
 fun YogaCompose(
     modifier: Modifier = Modifier,
-    flexDirection: YogaFlexDirection = YogaFlexDirection.ROW,
+    flexibleAxes: Set<Axis> = setOf(),
+    style: FlexStyle = FlexStyle(),
     content: @Composable () -> Unit
 ) {
-    val rootNodeContainer = remember {
-        FlexNodeContainer(YogaNodeFactory.create().apply {
-            this.flexDirection = flexDirection
-            wrap = YogaWrap.WRAP
-        })
+    val nodeContainer = remember {
+        FlexNodeContainer(YogaNodeFactory.create())
     }
+    val density = LocalDensity.current.density
+    style.applyTo(node = nodeContainer.node, density)
     MultiMeasureLayout(content = content, modifier = modifier) { measurables: List<Measurable>, constraints: Constraints ->
         val nodes = measurables.mapIndexed { index, measurable ->
             val nodeModifier = measurable.parentData as? YogaModifier2
             if (nodeModifier?.node == null) {
                 val node = YogaNodeFactory.create()
+                val styleModifier = measurable.parentData as? YogaModifier
+                styleModifier?.flexStyle?.applyTo(node, density)
                 Log.d("YogaLayoutComposable", "New node $node, Idx: $index")
                 node.setMeasureFunction { _, suggestedWidth, widthMode, suggestedHeight, heightMode ->
                     Log.d("YogaLayoutComposable", "Measuring from $node, Idx: $index")
@@ -254,50 +931,50 @@ fun YogaCompose(
                         return when (mode) {
                             YogaMeasureMode.UNDEFINED -> measuredSize
                             YogaMeasureMode.EXACTLY -> constrainedSize
-                            YogaMeasureMode.AT_MOST -> min(measuredSize, constrainedSize)
+                            YogaMeasureMode.AT_MOST -> measuredSize.coerceAtMost(constrainedSize)
                         }
                     }
+                    node.data = placeable
                     return@setMeasureFunction YogaMeasureOutput.make(
                         sanitize(suggestedWidth, placeable.width.toFloat(), widthMode),
                         sanitize(suggestedHeight, placeable.height.toFloat(), heightMode)
                     )
                 }
 
-                rootNodeContainer.node.addChildAt(node, index)
-                node.data = measurable
+                nodeContainer.node.addChildAt(node, index)
                 node
             } else {
                 nodeModifier.node.data = measurable
                 val owner = nodeModifier.node.owner
                 Log.d("YogaLayoutComposable", "Node: ${nodeModifier.node}, Idx: $index, Parent: $owner")
                 owner?.removeChildAt(owner.indexOf(nodeModifier.node))
-                rootNodeContainer.node.addChildAt(nodeModifier.node, index)
+                nodeContainer.node.addChildAt(nodeModifier.node, index)
                 nodeModifier.node
             }
         }
 
-        rootNodeContainer.node.calculateLayout(
-            //                flexibleAxes.contains(Axis.HORIZONTAL).let {
-            //                    if (it) {
-            //                        YogaConstants.UNDEFINED
-            //                    } else {
-            if (constraints.hasBoundedWidth) {
-                constraints.maxWidth.toFloat()
-            } else {
-                YogaConstants.UNDEFINED
-                //                        }
-                //                    }
+        nodeContainer.node.calculateLayout(
+            flexibleAxes.contains(Axis.HORIZONTAL).let {
+                if (it) {
+                    YogaConstants.UNDEFINED
+                } else {
+                    if (constraints.hasBoundedWidth) {
+                        constraints.maxWidth.toFloat()
+                    } else {
+                        YogaConstants.UNDEFINED
+                    }
+                }
             },
-            //                flexibleAxes.contains(Axis.VERTICAL).let {
-            //                    if (it) {
-            //                        YogaConstants.UNDEFINED
-            //                    } else {
-            if (constraints.hasBoundedHeight) {
-                constraints.maxHeight.toFloat()
-            } else {
-                YogaConstants.UNDEFINED
-                //                        }
-                //                    }
+            flexibleAxes.contains(Axis.VERTICAL).let {
+                if (it) {
+                    YogaConstants.UNDEFINED
+                } else {
+                    if (constraints.hasBoundedHeight) {
+                        constraints.maxHeight.toFloat()
+                    } else {
+                        YogaConstants.UNDEFINED
+                    }
+                }
             }
         )
 
@@ -307,18 +984,18 @@ fun YogaCompose(
             val paddingTop = node.getLayoutPadding(YogaEdge.TOP)
             val paddingBottom = node.getLayoutPadding(YogaEdge.BOTTOM)
 
-            val measurable = node.data as Measurable
-            node.data = measurable.measure(
+            val measurable = node.data as? Measurable
+            node.data = measurable?.measure(
                 Constraints(
                     maxWidth = node.layoutWidth.roundToInt() - paddingStart.toInt() - paddingEnd.toInt(),
                     maxHeight = node.layoutHeight.roundToInt() - paddingTop.toInt() - paddingBottom.toInt()
                 )
-            )
+            ) ?: node.data
         }
 
         layout(
-            rootNodeContainer.node.layoutWidth.roundToInt(),
-            rootNodeContainer.node.layoutHeight.roundToInt()
+            nodeContainer.node.layoutWidth.roundToInt(),
+            nodeContainer.node.layoutHeight.roundToInt()
         ) {
             nodes.forEach { node ->
                 val paddingStart = node.getLayoutPadding(YogaEdge.START)
@@ -340,7 +1017,7 @@ class YogaModifier2(val node: YogaNode) : ParentDataModifier {
     }
 }
 
-class YogaModifier(val flexGrow: Int) : ParentDataModifier {
+class YogaModifier(val flexStyle: FlexStyle) : ParentDataModifier {
     override fun Density.modifyParentData(parentData: Any?): Any? {
         return this@YogaModifier
     }
@@ -349,8 +1026,8 @@ class YogaModifier(val flexGrow: Int) : ParentDataModifier {
 @Preview(showBackground = true)
 @Composable
 fun YogaDefaultPreview() {
-    YogaCompose(modifier = Modifier.width(200.dp)) {
-        AndroidView(modifier = YogaModifier(flexGrow = 1), factory = { ctx ->
+    YogaCompose(modifier = Modifier.width(200.dp), style = FlexStyle(flexWrap = FlexWrap.WRAP)) {
+        AndroidView(modifier = YogaModifier(flexStyle = FlexStyle(flexGrow = 1f)), factory = { ctx ->
             TextView(ctx).apply {
                 setText("Hello Android!")
                 setBackgroundColor(ctx.getColor(R.color.teal_200))
@@ -365,7 +1042,7 @@ fun YogaDefaultPreview() {
                 alpha = 0.5f
             }
         })
-        YogaCompose(flexDirection = YogaFlexDirection.COLUMN) {
+        YogaCompose(style = FlexStyle(flexDirection = FlexDirection.COLUMN)) {
             AndroidView(factory = { ctx ->
                 TextView(ctx).apply {
                     setText("Hello Android3!")
