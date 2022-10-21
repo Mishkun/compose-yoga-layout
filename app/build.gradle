@@ -48,7 +48,7 @@ android {
 }
 
 dependencies {
-
+    implementation files("./libs/meditate-layout-1.0.1.jar")
     implementation 'androidx.core:core-ktx:1.9.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.5.1'
     implementation 'androidx.activity:activity-compose:1.6.0'
@@ -57,7 +57,7 @@ dependencies {
     implementation 'androidx.compose.material:material:1.2.1'
     implementation "com.google.android.flexbox:flexbox:3.0.0"
 //    implementation "com.facebook.yoga.android:yoga-layout:1.17.0"
-    implementation "io.github.orioncraftmc:meditate-layout:1.0.1"
+//    implementation "io.github.orioncraftmc:meditate-layout:1.0.1"
     implementation "com.facebook.soloader:soloader:0.10.1"
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.3'
