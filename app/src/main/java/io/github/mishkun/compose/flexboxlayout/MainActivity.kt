@@ -8,6 +8,7 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,17 +24,19 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Measurable
-import androidx.compose.ui.layout.MultiMeasureLayout
 import androidx.compose.ui.layout.ParentDataModifier
-import androidx.compose.ui.layout.Placeable
-import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.facebook.soloader.SoLoader
 import io.github.mishkun.compose.flexboxlayout.ui.theme.ComposeFlexboxLayoutTheme
@@ -908,13 +911,7 @@ fun Modifier.yoga(style: FlexStyle = FlexStyle()): Modifier {
         }
     }
     return then(YogaModifier3(thisNode.node))
-        .layout { measurable, constraints ->
-            thisNode.node.dirty()
-            val placeable = measurable.measure(constraints)
-            layout(placeable.width, placeable.height) {
-                placeable.place(0, 0)
-            }
-        }
+        .onPlaced { thisNode.node.dirty() }
 }
 
 fun YogaNode.removeSelf() {
@@ -948,7 +945,7 @@ fun YogaCompose(
         }
     } else {
         CompositionLocalProvider(YogaNodeLocal provides nodeContainer.node) {
-            MultiMeasureLayout(
+            Layout(
                 content = content,
                 modifier = modifier.then(YogaModifier2(nodeContainer.node))
             ) { measurables: List<Measurable>, constraints: Constraints ->
@@ -956,13 +953,9 @@ fun YogaCompose(
                     val nodeModifier = measurable.parentData as? YogaModifier3
                     val node = nodeModifier?.node ?: return@mapIndexedNotNull null
                     node.setMeasureFunction { _, suggestedWidth, widthMode, suggestedHeight, heightMode ->
-                        val placeable = measurable.measure(
-                            Constraints(
-                                maxWidth = if (suggestedWidth.isNaN()) Constraints.Infinity
-                                else suggestedWidth.roundToInt(),
-                                maxHeight = if (suggestedHeight.isNaN()) Constraints.Infinity
-                                else suggestedHeight.roundToInt()
-                            )
+                        val constraints1 = Constraints(
+                            maxWidth = if (suggestedWidth.isNaN()) Constraints.Infinity else suggestedWidth.roundToInt(),
+                            maxHeight = if (suggestedHeight.isNaN()) Constraints.Infinity else suggestedHeight.roundToInt()
                         )
 
                         fun sanitize(
@@ -976,14 +969,43 @@ fun YogaCompose(
                                 YogaMeasureMode.AT_MOST -> measuredSize.coerceAtMost(constrainedSize)
                             }
                         }
-                        node.data = placeable
+                        node.data = MeasuringUnit(
+                            measurable = measurable,
+                            constraints = constraints1,
+                        )
+
+                        val size = when {
+                            constraints1.hasBoundedWidth.not() -> {
+                                val height = measurable.maxIntrinsicHeight(Constraints.Infinity)
+                                val width = measurable.maxIntrinsicWidth(height)
+                                Size(width.toFloat(), height.toFloat())
+                            }
+                            constraints1.hasBoundedHeight.not() -> {
+                                val width = measurable.maxIntrinsicWidth(Constraints.Infinity)
+                                val height = measurable.maxIntrinsicHeight(width)
+                                Size(width.toFloat(), height.toFloat())
+                            }
+                            else -> {
+                                val width = measurable.maxIntrinsicWidth(constraints1.maxHeight)
+                                val height = measurable.maxIntrinsicHeight(width)
+                                    .coerceAtLeast(measurable.maxIntrinsicHeight(constraints1.maxWidth))
+                                Size(width.toFloat(), height.toFloat())
+                            }
+                        }
+
                         Log.d(
                             "YogaCompose",
-                            "Node: $node, $index, Heightmd: $heightMode, WidthMd: $widthMode, Constraints: $constraints, w: ${placeable.measuredWidth}, h: ${placeable.measuredHeight}"
+                            "Node: ${node.toString()}, $index, Heightmd: $heightMode, WidthMd: $widthMode, Constraints: $constraints, w: ${size.width}, h: ${size.height}"
                         )
+
+                        Log.d(
+                            "YogaCompose",
+                            "Node2: suggestedWidth - $suggestedWidth, suggestedHeight - $suggestedHeight, node.layoutWidth - ${node.layoutWidth}, node.layoutHeight - ${node.layoutHeight}"
+                        )
+
                         return@setMeasureFunction YogaMeasureOutput.make(
-                            sanitize(suggestedWidth, placeable.width.toFloat(), widthMode),
-                            sanitize(suggestedHeight, placeable.height.toFloat(), heightMode)
+                            sanitize(suggestedWidth, size.width, widthMode),
+                            sanitize(suggestedHeight, size.height, heightMode)
                         )
                     }
                     node
@@ -1025,14 +1047,19 @@ fun YogaCompose(
 
                     val measurable = node.data as? Measurable
                     if (measurable != null) Log.d("YogaCompose", "Measurable for node $node")
-                    node.data = measurable?.measure(
-                        Constraints(
-                            maxWidth = node.layoutWidth.roundToInt() - paddingStart.toInt() - paddingEnd.toInt(),
-                            minWidth = node.layoutWidth.roundToInt() - paddingStart.toInt() - paddingEnd.toInt(),
-                            minHeight = node.layoutHeight.roundToInt() - paddingTop.toInt() - paddingBottom.toInt(),
-                            maxHeight = node.layoutHeight.roundToInt() - paddingTop.toInt() - paddingBottom.toInt()
+                    val constraints1 = Constraints(
+                        maxWidth = node.layoutWidth.roundToInt() - paddingStart.toInt() - paddingEnd.toInt(),
+                        minWidth = node.layoutWidth.roundToInt() - paddingStart.toInt() - paddingEnd.toInt(),
+                        minHeight = node.layoutHeight.roundToInt() - paddingTop.toInt() - paddingBottom.toInt(),
+                        maxHeight = node.layoutHeight.roundToInt() - paddingTop.toInt() - paddingBottom.toInt()
+                    )
+
+                    node.data = measurable?.let {
+                        MeasuringUnit(
+                            measurable = it,
+                            constraints = constraints1,
                         )
-                    ) ?: node.data
+                    } ?: node.data
                 }
 
                 layout(
@@ -1043,8 +1070,18 @@ fun YogaCompose(
                         val paddingStart = node.getLayoutPadding(YogaEdge.START)
                         val paddingTop = node.getLayoutPadding(YogaEdge.TOP)
 
-                        val placeable = node.data as Placeable
-                        Log.d("YogaCompose", "Node: $node, $index, Placeable: ${node.layoutX}, ${node.layoutY}")
+                        val measuringUnit = node.data as MeasuringUnit
+                        val placeable = measuringUnit.measurable.measure(
+                            measuringUnit.constraints.copy(
+                                minWidth = node.layoutWidth.roundToInt(),
+                                minHeight = node.layoutHeight.roundToInt(),
+                            )
+                        )
+                        Log.d(
+                            "YogaCompose",
+                            "Node: $node, $index, Placeable: ${node.layoutX}, ${node.layoutY}, ${node.layoutWidth}, ${node.layoutHeight}"
+                        )
+                        Log.d("YogaCompose2", "Node2: constraints - ${measuringUnit.constraints}")
                         placeable.place(
                             x = node.layoutXInAncestor(nodeContainer.node).roundToInt() + paddingStart.toInt(),
                             y = node.layoutYInAncestor(nodeContainer.node).roundToInt() + paddingTop.toInt()
@@ -1053,10 +1090,13 @@ fun YogaCompose(
                 }
             }
         }
-
     }
-
 }
+
+private data class MeasuringUnit(
+    val measurable: Measurable,
+    val constraints: Constraints,
+)
 
 fun YogaNode.printLayout() {
     Log.d("YogaNode", "Node: $this, x: $layoutX, y: $layoutY, w: $layoutWidth, h: $layoutHeight, childs: $childCount")
@@ -1100,21 +1140,42 @@ class YogaModifier(val flexStyle: FlexStyle) : ParentDataModifier {
 @Composable
 fun YogaDefaultPreview() {
     YogaCompose(modifier = Modifier.width(200.dp), style = FlexStyle(flexWrap = FlexWrap.WRAP)) {
-        AndroidView(modifier = Modifier.yoga(style = FlexStyle(flexGrow = 1f)), factory = { ctx ->
-            TextView(ctx).apply {
-                setText("Hello Android!")
-                setBackgroundColor(ctx.getColor(R.color.teal_200))
-                layoutParams = ViewGroup.LayoutParams(WRAP_CONTENT, ctx.resources.displayMetrics.density.toInt() * 48)
-                alpha = 0.5f
-            }
-        })
-        AndroidView(modifier = Modifier.yoga(), factory = { ctx ->
-            TextView(ctx).apply {
-                setText("Hello Android2!")
-                setBackgroundColor(ctx.getColor(R.color.teal_700))
-                alpha = 0.5f
-            }
-        })
+        Text(
+            text = "Hello Android!",
+            modifier = Modifier
+                .height(48.dp)
+                .alpha(0.5f)
+                .background(colorResource(R.color.teal_200))
+                .yoga(style = FlexStyle(flexGrow = 1f)),
+            fontSize = 14.sp,
+        )
+
+        Text(
+            text = "Hello Android2!",
+            modifier = Modifier
+                .alpha(0.5f)
+                .background(colorResource(R.color.teal_700))
+                .yoga(),
+            fontSize = 14.sp,
+        )
+
+        // todo: uncomment me to see the differences
+//        AndroidView(modifier = Modifier.yoga(style = FlexStyle(flexGrow = 1f)), factory = { ctx ->
+//            TextView(ctx).apply {
+//                setText("Hello Android!")
+//                setBackgroundColor(ctx.getColor(R.color.teal_200))
+//                layoutParams = ViewGroup.LayoutParams(WRAP_CONTENT, ctx.resources.displayMetrics.density.toInt() * 48)
+//                alpha = 0.5f
+//            }
+//        })
+//        AndroidView(modifier = Modifier.yoga(), factory = { ctx ->
+//            TextView(ctx).apply {
+//                setText("Hello Android2!")
+//                setBackgroundColor(ctx.getColor(R.color.teal_700))
+//                alpha = 0.5f
+//            }
+//        })
+
         YogaCompose(style = FlexStyle(flexDirection = FlexDirection.COLUMN)) {
             AndroidView(modifier = Modifier.yoga(), factory = { ctx ->
                 TextView(ctx).apply {
